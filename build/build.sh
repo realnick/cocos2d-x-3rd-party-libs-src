@@ -375,7 +375,7 @@ do
         fi
 
         if [ $cfg_platform_name = "android" ];then
-            if [ $MY_TARGET_ARCH = "arm64-v8a" ];then
+            if [ $MY_TARGET_ARCH = "arm64-v8a" ] || [ $MY_TARGET_ARCH = "x86_64" ];then
                 export ANDROID_API=android-$cfg_default_arm64_build_api
             else
                 export ANDROID_API=android-$build_api
