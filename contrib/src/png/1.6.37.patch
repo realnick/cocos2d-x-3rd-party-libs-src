@@ -1,0 +1,13 @@
+diff --git a/config.sub b/config.sub
+index 61cb4bc..67fb165 100755
+--- a/config.sub
++++ b/config.sub
+@@ -353,7 +353,7 @@ case $basic_machine in
+ 	# We use `pc' rather than `unknown'
+ 	# because (1) that's what they normally are, and
+ 	# (2) the word "unknown" tends to confuse beginning users.
+-	i*86 | x86_64)
++	i*86 | x86_64 | arm64-apple)
+ 	  basic_machine=$basic_machine-pc
+ 	  ;;
+ 	# Object if more than one company name word.

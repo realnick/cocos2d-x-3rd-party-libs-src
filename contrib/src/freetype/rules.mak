@@ -11,6 +11,7 @@ $(TARBALLS)/freetype-$(FREETYPE2_VERSION).tar.gz:
 freetype: freetype-$(FREETYPE2_VERSION).tar.gz .sum-freetype
 	$(UNPACK)
 	$(call pkg_static, "builds/unix/freetype2.in")
+	$(APPLY) $(SRC)/freetype/$(FREETYPE2_VERSION).patch
 	$(MOVE)
 
 DEPS_freetype = zlib $(DEPS_zlib)

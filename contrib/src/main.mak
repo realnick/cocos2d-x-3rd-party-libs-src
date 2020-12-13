@@ -127,8 +127,13 @@ ifeq ($(ARCH),x86_64)
 EXTRA_CFLAGS += -m64 $(OPTIM)
 EXTRA_LDFLAGS += -m64
 else
+ifeq ($(ARCH),arm64)
+EXTRA_CFLAGS += -m64 -target arm64-apple-macos11 $(OPTIM)
+EXTRA_LDFLAGS += -m64 -target arm64-apple-macos11 
+else
 EXTRA_CFLAGS += -m32 $(OPTIM)
 EXTRA_LDFLAGS += -m32
+endif
 endif
 
 XCODE_FLAGS = -sdk macosx$(OSX_VERSION)
