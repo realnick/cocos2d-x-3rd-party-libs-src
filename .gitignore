@@ -32,6 +32,7 @@
 /build/android-toolchain-*/
 /build/tvos/
 /build/ios/
+/build/xcframeworks/
 /build/mac/
 /contrib/android-arm/
 /contrib/android-armv7/
@@ -48,6 +49,7 @@
 /contrib/install-winrt/
 /contrib/install-win10/
 /contrib/ios-arm64/
+/contrib/ios-arm64_simulator/
 /contrib/ios-armv7/
 /contrib/ios-armv7s/
 /contrib/ios-i386/

@@ -1,5 +1,5 @@
 # ZLIB
-ZLIB_VERSION := 1.2.8
+ZLIB_VERSION := 1.3.1
 ZLIB_URL := http://zlib.net/fossils/zlib-$(ZLIB_VERSION).tar.gz
 
 

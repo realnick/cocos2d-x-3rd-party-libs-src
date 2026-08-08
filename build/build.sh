@@ -369,6 +369,20 @@ do
         if [ $cfg_platform_name = "ios" ];then
             export BUILDFORIOS="yes"
         fi
+
+        # "arm64_simulator" is a distinct arch token so its prebuilt output
+        # lands in its own folder (ios/<lib>/prebuilt/arm64_simulator), never
+        # merged via lipo with the real-device arm64 slice. The compiler only
+        # understands "arm64" as a -arch value, so it's mapped back here;
+        # IOS_FORCE_SIMULATOR tells contrib/bootstrap's check_ios_sdk to pick
+        # the iPhoneSimulator SDK for this pass instead of iPhoneOS.
+        if [ $cfg_platform_name = "ios" ] && [ $arch = "arm64_simulator" ];then
+            MY_TARGET_ARCH="arm64"
+            export MY_TARGET_ARCH
+            export IOS_FORCE_SIMULATOR="yes"
+        else
+            unset IOS_FORCE_SIMULATOR
+        fi
         
         if [ $cfg_platform_name = "tvos" ];then
             export BUILDFORTVOS="yes"

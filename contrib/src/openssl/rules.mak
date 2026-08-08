@@ -1,5 +1,9 @@
 # OPENSSL
-OPENSSL_VERSION := 1.1.1k
+# 1.1.1w is the final 1.1.1 LTS release (Sep 2023) - the 1.1.1 branch itself
+# is EOL, but this stays API-compatible with 1.1.1k while picking up ~2.5
+# years of security fixes. A 3.x upgrade is a separate, larger decision
+# (engine removal / API changes could affect curl and websockets).
+OPENSSL_VERSION := 1.1.1w
 OPENSSL_URL := https://www.openssl.org/source/openssl-$(OPENSSL_VERSION).tar.gz
 
 OPENSSL_EXTRA_CONFIG_1=no-shared no-unit-test
@@ -73,18 +77,27 @@ ifdef HAVE_IOS
 
 ifeq ($(MY_TARGET_ARCH),armv7)
 IOS_PLATFORM=OS
-OPENSSL_CONFIG_VARS=ios-cross
+# Stock openssl's own "ios-cross" target hardcodes "-arch armv7" (see
+# Configurations/15-ios.conf), so armv7s built through it silently produces
+# an armv7 object too. Use our own per-arch targets (config/20-ios-tvos-
+# cross.conf) so each arch actually gets its own -arch flag.
+OPENSSL_CONFIG_VARS=ios-cross-armv7
 OPENSSL_EXTRA_CONFIG_2=no-async
 endif
 
 ifeq ($(MY_TARGET_ARCH),arm64)
+ifeq ($(IOS_FORCE_SIMULATOR),yes)
+IOS_PLATFORM=Simulator
+OPENSSL_CONFIG_VARS=ios-sim-cross-arm64
+else
 IOS_PLATFORM=OS
 OPENSSL_CONFIG_VARS=ios64-cross
+endif
 OPENSSL_EXTRA_CONFIG_2=no-async
 endif
 ifeq ($(MY_TARGET_ARCH),armv7s)
 IOS_PLATFORM=OS
-OPENSSL_CONFIG_VARS=ios-cross
+OPENSSL_CONFIG_VARS=ios-cross-armv7s
 OPENSSL_EXTRA_CONFIG_2=no-async
 endif
 
@@ -144,9 +157,6 @@ openssl: openssl-$(OPENSSL_VERSION).tar.gz .sum-openssl
 	$(UNPACK)
 ifdef HAVE_ANDROID
 	$(APPLY) $(SRC)/openssl/android-clang.patch
-endif
-ifdef HAVE_IOS
-	$(APPLY) $(SRC)/openssl/ios-armv7-crash.patch
 endif
 	$(MOVE)
 

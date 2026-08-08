@@ -43,6 +43,9 @@ lua: lua-$(LUA_VERSION).tar.gz .sum-lua
 ifdef HAVE_TVOS
 	$(APPLY) $(SRC)/lua/lua-no-system.patch
 endif
+ifdef HAVE_IOS
+	$(APPLY) $(SRC)/lua/lua-no-system.patch
+endif
 
 	(cd $(UNPACK_DIR) && \
 	sed -e 's%gcc%$(CC)%' \

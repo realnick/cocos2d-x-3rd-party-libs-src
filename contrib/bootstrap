@@ -181,17 +181,31 @@ check_tvos_sdk()
 check_ios_sdk()
 {
    [ -z "${MY_TARGET_ARCH}" ] && echo "You must set MY_TARGET_ARCH environment variable" && exit 1
-    if [ $MY_TARGET_ARCH = "i386" ] || [ $MY_TARGET_ARCH = "x86_64" ];then
+    if [ $MY_TARGET_ARCH = "i386" ] || [ $MY_TARGET_ARCH = "x86_64" ] || [ "${IOS_FORCE_SIMULATOR}" = "yes" ];then
         IOS_PLATFORM="Simulator"
     else
         IOS_PLATFORM="OS"
     fi
-   
-   SDK_VERSION=$(xcodebuild -showsdks | grep iphoneos | sort | tail -n 1 | awk '{print substr($NF,9)}')
-   
+
+   # Current Xcode/SDKs dropped the 32-bit (armv7/armv7s/i386) slices from
+   # libSystem, so anything that links (i.e. every autoconf ./configure
+   # check) fails outright for those arches even though clang itself still
+   # emits the object code fine. Point -isysroot at an older Xcode's SDK
+   # (which still ships those slices) instead - the current clang/xcrun
+   # binary keeps handling everything else, so this is scoped to just the
+   # SDKROOT lookup below and never exported into the wider build. Override
+   # via IOS_LEGACY_XCODE_DEVELOPER_DIR if Xcode13.app isn't at this path.
+   if [ "$MY_TARGET_ARCH" = "armv7" ] || [ "$MY_TARGET_ARCH" = "armv7s" ] || [ "$MY_TARGET_ARCH" = "i386" ]; then
+       XCODE_DEV_DIR="${IOS_LEGACY_XCODE_DEVELOPER_DIR:-/Applications/Xcode13.app/Contents/Developer}"
+   else
+       XCODE_DEV_DIR="$(xcode-select -print-path)"
+   fi
+
+   SDK_VERSION=$(DEVELOPER_DIR="$XCODE_DEV_DIR" xcodebuild -showsdks | grep iphoneos | sort | tail -n 1 | awk '{print substr($NF,9)}')
+
    if test -z "$SDKROOT"
    then
-      SDKROOT=`xcode-select -print-path`/Platforms/iPhone${IOS_PLATFORM}.platform/Developer/SDKs/iPhone${IOS_PLATFORM}${SDK_VERSION}.sdk
+      SDKROOT=${XCODE_DEV_DIR}/Platforms/iPhone${IOS_PLATFORM}.platform/Developer/SDKs/iPhone${IOS_PLATFORM}${SDK_VERSION}.sdk
       echo "SDKROOT not specified, assuming $SDKROOT"
    else
       SDKROOT="$SDKROOT"
@@ -218,11 +232,17 @@ check_ios_sdk()
        if [ "${MY_TARGET_ARCH}" != "arm64" ]; then
            EX_CFLAGS="${EX_CFLAGS} -mcpu=cortex-a8"
        fi
+       add_make "EXTRA_CFLAGS := ${EX_CFLAGS}"
+       add_make "EXTRA_LDFLAGS := -L${SDKROOT}/usr/lib -arch ${MY_TARGET_ARCH} -isysroot ${SDKROOT} -miphoneos-version-min=7.0"
    else
-       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH} -miphoneos-version-min=7.0"
+       # Use -mios-simulator-version-min (not -miphoneos-version-min) so clang
+       # tags the output with the Simulator platform load command. iOS 10 is
+       # the highest deployment target clang accepts for 32-bit targets
+       # (i386), so cap at 9.0 uniformly rather than branching per arch.
+       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH} -mios-simulator-version-min=9.0"
+       add_make "EXTRA_CFLAGS := ${EX_CFLAGS}"
+       add_make "EXTRA_LDFLAGS := -L${SDKROOT}/usr/lib -arch ${MY_TARGET_ARCH} -isysroot ${SDKROOT} -mios-simulator-version-min=9.0"
    fi
-   add_make "EXTRA_CFLAGS := ${EX_CFLAGS}"
-   add_make "EXTRA_LDFLAGS := -L${SDKROOT}/usr/lib -arch ${MY_TARGET_ARCH} -isysroot ${SDKROOT} -miphoneos-version-min=7.0"
 }
 
 check_macosx_sdk()

@@ -1,7 +1,9 @@
 # chipmunk
 
 CHIPMUNK_VERSION := 7.0.1
-CHIPMUNK_URL := https://chipmunk-physics.net/release/Chipmunk-7.x/Chipmunk-$(CHIPMUNK_VERSION).tgz
+# chipmunk-physics.net's official mirror serves an invalid/self-signed TLS
+# cert; pull the same tagged release from the project's GitHub mirror instead.
+CHIPMUNK_URL := https://codeload.github.com/slembcke/Chipmunk2D/tar.gz/refs/tags/Chipmunk-$(CHIPMUNK_VERSION)
 
 $(TARBALLS)/Chipmunk-$(CHIPMUNK_VERSION).tgz:
 	$(call download,$(CHIPMUNK_URL))

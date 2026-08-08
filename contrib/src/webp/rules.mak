@@ -22,7 +22,11 @@ webp: libwebp-$(WEBP_VERSION).tar.gz .sum-webp
 	$(MOVE)
 
 .webp: webp
-	cd $< && $(HOSTVARS) ./configure $(HOSTCONF)
+	# The cwebp/dwebp example tools (not libwebp.a itself, which we actually
+	# need) optionally link against libjpeg/libpng/libtiff/giflib for format
+	# conversion. Disabling that avoids a build break where webp's example
+	# code assumes an older libjpeg callback signature than what's installed.
+	cd $< && $(HOSTVARS) ./configure $(HOSTCONF) --disable-jpeg --disable-png --disable-tiff --disable-gif
 	cd $< && $(MAKE)
 	cd $< && $(MAKE) install
 	touch $@

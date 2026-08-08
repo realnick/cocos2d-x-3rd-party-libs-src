@@ -3,7 +3,9 @@
 BULLET_GITURL := https://github.com/bulletphysics/bullet3
 
 $(TARBALLS)/libbullet-git.tar.xz:
-	$(call download_git,$(BULLET_GITURL),master,19f999a)
+	# The pinned commit (19f999a) is tag 2.82, not on current master's
+	# history (upstream rewrote master's history since this was pinned).
+	$(call download_git,$(BULLET_GITURL),2.82,19f999a)
 
 .sum-bullet: libbullet-git.tar.xz
 	$(warning $@ not implemented)
