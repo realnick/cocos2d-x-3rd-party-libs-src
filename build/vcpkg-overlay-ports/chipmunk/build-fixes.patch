@@ -1,0 +1,47 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bf9a194..180e431 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,5 +1,4 @@
+-cmake_minimum_required(VERSION 2.6)
+-cmake_policy(SET CMP0001 NEW) # don't use MAKE_BACKWARDS_COMPATIBILITY but policies instead
++cmake_minimum_required(VERSION 3.10)
+ cmake_policy(SET CMP0042 NEW) # use MACOSX_RPATH
+ 
+ project(chipmunk)
+diff --git a/include/chipmunk/chipmunk.h b/include/chipmunk/chipmunk.h
+index 1c204ab..9fb3efe 100644
+--- a/include/chipmunk/chipmunk.h
++++ b/include/chipmunk/chipmunk.h
+@@ -25,7 +25,7 @@
+ #include <stdlib.h>
+ #include <math.h>
+ 
+-#ifdef WIN32
++#if defined(WIN32) || defined(_WIN32)
+ 	// For alloca().
+ 	#include <malloc.h>
+ 	#define CP_EXPORT __declspec(dllexport)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index ef6706d..d2f04e2 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -54,5 +54,4 @@ endif(BUILD_STATIC)
+ if(BUILD_SHARED OR INSTALL_STATIC)
+   # FIXME: change to PUBLIC_HEADER to allow building frameworks
+   install(FILES ${chipmunk_public_header} DESTINATION include/chipmunk)
+-  install(FILES ${chipmunk_constraint_header} DESTINATION include/chipmunk/constraints)
+ endif(BUILD_SHARED OR INSTALL_STATIC)
+diff --git a/src/chipmunk.c b/src/chipmunk.c
+index d0ff24c..09c76bd 100644
+--- a/src/chipmunk.c
++++ b/src/chipmunk.c
+@@ -43,7 +43,7 @@ cpMessage(const char *condition, const char *file, int line, int isError, int is
+ #define STR(s) #s
+ #define XSTR(s) STR(s)
+ 
+-const char *cpVersionString = XSTR(CP_VERSION_MAJOR)"."XSTR(CP_VERSION_MINOR)"."XSTR(CP_VERSION_RELEASE);
++const char *cpVersionString = XSTR(CP_VERSION_MAJOR) "." XSTR(CP_VERSION_MINOR) "." XSTR(CP_VERSION_RELEASE);
+ 
+ //MARK: Misc Functions
+ 

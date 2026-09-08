@@ -47,6 +47,7 @@
 /contrib/tvos-arm64/
 /contrib/tvos-x86_64/
 /contrib/install-winrt/
+/contrib/install-win32/
 /contrib/install-win10/
 /contrib/ios-arm64/
 /contrib/ios-arm64_simulator/

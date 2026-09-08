@@ -73,10 +73,284 @@ Then use command as follow to build 32-bit libs
 ```
 
 ### Windows 10 Universal (win10) App users
-The build script for Windows 10.0 Universal (win10) external dependencies in in build\build_win10_uwp.bat. The script will build all of the dependencies using a customized version of [vcpkg] (https://github.com/Microsoft/vcpkg). After build_win10_uwp.bat is complete, the external dependencies will be in contrib\install-win10\external.
+
+`build\build_win10_uwp.bat` builds the UWP dependencies with vcpkg and lays them out
+in `contrib\install-win10\external\cocos2d-x-deps`;
+`install_to_cocos2d_x_uwp.ps1` then copies them into a cocos2d-x working tree.
+
+```
+build\build_win10_uwp.bat                 :: win32 + x64 + arm64
+build\build_win10_uwp.bat x64             :: one architecture
+build\build_win10_uwp.bat win32 arm64     :: a subset
+build\build_win10_uwp.bat clean x64       :: wipe the output first
+```
+
+Architecture tokens are `win32`, `x64` and `arm64`, matching cocos2d-x's
+`prebuilt\win10\<arch>` directories. Set `COCOS_VCPKG_DIR` to use a vcpkg clone
+somewhere else.
+
+**ARM32 (`arm-uwp`) is no longer built.** Windows 10 Mobile is gone and the MSVC
+toolset in current Visual Studio has no `arm` target — only `arm64`, `x64` and `x86` —
+so it cannot be produced any more.
+
+This script used to install a `cocos2d-x-deps` meta-port from the
+`stammen/vcpkg-cocos2d-x` fork for x86/x64/arm, while a separate
+`build_win10_uwp_arm64.bat` used `microsoft/vcpkg` for arm64 — two different and
+widely divergent version sets. The two are now one script on `microsoft/vcpkg` with
+the overlay ports, so every UWP architecture, and Windows desktop with it, is
+version-aligned as long as they share the vcpkg clone — see
+*Upgrading the vcpkg dependency versions* below for how to keep them that way.
+
+Note that the UWP path targets cocos2d-x v3 only.
 
 
-### For Windows (Win32) App users
+### Windows desktop (Win32 / x64 / ARM64) users
+
+Building and installing are two steps. `build\build_win32_desktop.bat` builds the
+**union** of what cocos2d-x v3 and v4 need with vcpkg, the same way
+`build_win10_uwp.bat` does for UWP; `install_to_cocos2d_x_win32.ps1` then
+installs the subset for **one** of them into a cocos2d-x working tree.
+
+```
+build\build_win32_desktop.bat                 :: win32 + win64 + arm64
+build\build_win32_desktop.bat win64           :: one architecture
+build\build_win32_desktop.bat win32 arm64     :: a subset
+build\build_win32_desktop.bat clean win64     :: wipe the vcpkg clone first
+
+powershell -File build\install_to_cocos2d_x_win32.ps1 -Target v4 -Cocos2dRoot <path>
+powershell -File build\install_to_cocos2d_x_win32.ps1 -Target v3 -Cocos2dRoot <path> -Arches win32
+```
+
+Architecture tokens are `win32`, `win64` (alias `x64`) and `arm64`; the token is also
+the name of the per-architecture output directory. The build clones microsoft/vcpkg
+under `contrib\install-win32\vcpkg`; set `COCOS_VCPKG_DIR` to reuse an existing clone
+instead.
+
+Two triplets are used per architecture so that each library keeps the linkage
+cocos2d-x's existing win32 prebuilts have:
+
+- `<arch>-windows` (DLL + import lib): zlib, openssl, curl, libuv, libwebsockets,
+  tiff, sqlite3, libogg, libvorbis, mpg123, openal-soft, glew, libiconv
+- `<arch>-windows-static-md` (static lib, dynamic CRT): freetype, libpng,
+  libjpeg-turbo, libwebp, glfw3, chipmunk, libwebsockets
+
+libwebsockets is built under both because v4 links the DLL where v3 links a static
+`websockets.lib`. `-Target v3` additionally installs tiff and sqlite3; `-Target v4`
+additionally installs openssl and libuv. Neither is installed for the other.
+
+Box2D and bullet are **not** built here. cocos2d-x links a single merged
+`libbullet.lib` and compiles against its own bundled Box2D/bullet headers, which the
+upstream vcpkg ports do not match. v3 builds them from source through project
+references (`external\Box2D\proj.win32\libbox2d.vcxproj`); for v4 they would need
+pinned overlay ports of their own, the way `vcpkg-overlay-ports\chipmunk` pins
+Chipmunk 7.0.1 with `CP_USE_DOUBLES=0` — the version both v3 and v4 bundle headers
+for.
+
+Note that the UWP scripts in this directory target v3 only.
+
+**Layout.** Binaries go to `<lib>\prebuilt\<arch>` (`sqlite3\libraries\<arch>` for v3),
+and `win32-specific\<lib>\prebuilt` stays flat for win32 with an `<arch>` subdirectory
+for the others, because cocos2d-x has it flat today. `win32` therefore lands exactly
+where both trees already look and an existing 32-bit build keeps working untouched.
+
+**cocos2d-x side changes** for the new architectures:
+
+- v4 (CMake): `external\cmake\CocosExternalConfig.cmake` has to pick
+  `platform_spec_path` by architecture instead of hardcoding `win32`.
+- v3 (vcxproj): `cocos\2d\libcocos2d.vcxproj` needs x64 / ARM64 platform
+  configurations whose xcopy steps read `prebuilt\<arch>\` instead of `prebuilt\win32\`.
+
+A few file names also differ from what cocos2d-x hardcodes and have to be followed on
+the engine side — openssl 3.x DLLs (`libcrypto-3-x64.dll`, not `libcrypto-1_1.dll`),
+the ogg/vorbis, iconv and zlib DLLs (`ogg.dll` / `iconv-2.dll` / `z.dll`, not the
+`lib*` / `zlib1` names) and `libsharpyuv.lib`, which recent libwebp splits out and
+must be linked alongside `libwebp.lib`. The install script prints every rename and every file it could not find
+at the end of each run.
+
+### versions.json — which versions this repo currently produces
+
+`versions.json` at the repo root is the one place that answers "what are we
+shipping", across every platform. Regenerate it after a Windows build and commit
+the result:
+
+```
+build/record_versions.sh              # regenerate (needs the vcpkg clone)
+build/record_versions.sh --verify     # compare the two halves, exit 1 on drift
+```
+
+It exists because the two halves of this repo pin versions in completely
+different ways:
+
+| toolchain | platforms | where the version lives |
+|---|---|---|
+| vcpkg | win32 desktop, win10 UWP | the vcpkg clone's git commit, plus `build/vcpkg-overlay-ports/*/vcpkg.json` |
+| contrib | ios, tvos, mac, android, linux, tizen | `contrib/src/<library>/rules.mak` |
+
+The contrib versions are already in the repo. **The Windows ones were recorded
+nowhere**: the clone is gitignored, so a fresh clone on another machine silently
+picks up whatever is newest. `versions.json` closes that — `vcpkg.commit` is the
+pin, and `git checkout <commit>` in the clone reproduces that half exactly.
+
+Each library gets one entry naming the version on each side and a `state`:
+`aligned`, `diverged`, `vcpkg-only` or `contrib-only`. vcpkg port names and
+contrib directory names are mapped onto one canonical name first (`libjpeg-turbo`
+and `jpeg` are both `libjpeg`, `tiff` is `libtiff`, and so on), or the two halves
+would never line up. `role` separates the libraries cocos2d-x links itself from
+the dependencies those drag in.
+
+`--verify` needs nothing but the repo, so the machines that build iOS, Android
+and Mac can check whether a recipe is in step with Windows before touching it.
+It only compares the upstream version, ignoring a vcpkg `#N` port-version, since
+that is a repackaging of the same release.
+
+Right now one primary library is aligned (chipmunk) and fourteen are not.
+Raising the contrib recipes is the intended direction — openssl 1.1.1 is EOL, so
+pinning Windows back down to it is not an option — and it should be staged,
+smallest gaps first. Note that these recipes only build on macOS and Linux, so
+that work cannot be done from a Windows machine.
+
+### Checking an installed tree for DLLs that will not load
+
+```
+powershell -File build\check_cocos2d_x_deps.ps1 -Path <cocos2d-x tree or external dir>
+powershell -File build\check_cocos2d_x_deps.ps1 -Path contrib\install-win10\external\cocos2d-x-deps
+```
+
+It asks every DLL in the tree what it imports and resolves each import against
+the tree, **matching the machine type** — an x64 copy does not satisfy the win32
+one. Windows system DLLs and the UWP `*_APP.dll` CRT (supplied by the VCLibs
+framework package) are excluded. Exit code is 1 when anything is unresolved, so
+it can gate a build.
+
+Run it after installing. This catches the failure mode nothing else does: a
+transitive DLL that no one links, so the build succeeds and only the *load*
+fails — often not at startup but the first time that code path runs. Two real
+examples: a shared libtiff pulls in `jpeg62.dll` and `liblzma.dll`, and current
+openal-soft pulls in `fmt.dll`. Both are fixed now — libtiff is built as
+`tiff[core]` static and `fmt.dll` ships beside `OpenAL32.dll` — but the next
+version bump can introduce another one exactly the same way.
+
+When it reports something, there are two ways out: ship the missing DLL beside
+the one that needs it, or build that library statically so there is nothing to
+load. Prefer static where cocos2d-x deploys by `xcopy *.lib` (v3's libtiff) or
+where the extra DLLs have nowhere sensible to live.
+
+Note that installing the DLL is only half the job for v4: it deploys what is
+listed in a target's `IMPORTED_LOCATION`, so an extra DLL has to be appended
+there in the library's `CMakeLists.txt` — `external\win32-specific\OggDecoder`
+already does this for its second and third DLL.
+
+### Upgrading the vcpkg dependency versions (win10 UWP and Windows desktop)
+
+Both `build_win10_uwp.bat` and `build_win32_desktop.bat` use vcpkg in classic mode, so
+**the vcpkg clone's git commit is the version pin** — there is no manifest or baseline
+file in this repo. Two consequences:
+
+- Both scripts default to the **same clone**, `contrib\install-win10\vcpkg` (the name
+  is historical; it is not UWP-specific), and `COCOS_VCPKG_DIR` overrides both. Keep it
+  that way. With separate clones the recipes drift apart silently and UWP and desktop
+  end up on different versions of curl, openssl, libwebsockets and so on — and because
+  vcpkg separates everything by triplet, one clone holding all nine triplets is the
+  intended arrangement, not a compromise.
+- `vcpkg install` does **not** upgrade a package that is already installed — it just
+  reports it as present, in milliseconds. Pulling new ports alone changes nothing; the
+  outdated packages have to be rebuilt explicitly. A "build" that finished suspiciously
+  fast did nothing at all.
+
+The procedure:
+
+```
+:: 0. record what you are on now, so you can roll back
+cd contrib\install-win10\vcpkg
+git rev-parse HEAD
+
+:: 1. move the ports forward (or `git checkout <commit>` for a specific version set)
+git pull
+.\bootstrap-vcpkg.bat -disableMetrics
+
+:: 2. see what the pull actually changed (dry run -- it only lists)
+vcpkg upgrade --overlay-ports=..\..\..\build\vcpkg-overlay-ports
+
+:: 3. remove the outdated packages, for every triplet the list named
+vcpkg remove --recurse --overlay-ports=..\..\..\build\vcpkg-overlay-ports ^
+    <port>:<triplet> <port>:<triplet> ...
+
+:: 4. rebuild both platforms so they stay in step
+cd ..\..\..\build
+build_win10_uwp.bat
+build_win32_desktop.bat
+
+:: 5. reinstall into each cocos2d-x working tree
+powershell -File install_to_cocos2d_x_uwp.ps1   -DepsRoot <this repo> -Cocos2dRoot <v3 tree>
+powershell -File install_to_cocos2d_x_win32.ps1 -Target v3 -Cocos2dRoot <v3 tree>
+powershell -File install_to_cocos2d_x_win32.ps1 -Target v4 -Cocos2dRoot <v4 tree>
+```
+
+**Do not run `vcpkg upgrade --no-dry-run`.** Use it only as the preview it is in step 2.
+Applying it re-resolves every package with its *default* features, which would turn the
+`freetype[core]` the desktop build asks for into `freetype[brotli,bzip2,core,png,zlib]`.
+cocos2d-x links a single `freetype.lib` and would then fail on unresolved brotli, bz2,
+png and zlib symbols. Removing and letting the build scripts reinstall keeps the
+feature selection the scripts spell out.
+
+**Never install while a rebuild is in flight.** Between the `vcpkg remove` in step 3 and
+the end of step 4 the packages simply do not exist, and the install scripts skip what
+they cannot find — leaving the previous version in the cocos2d-x tree and listing it
+under "not found in the vcpkg trees". Read that section; a silent stale library is
+worse than a failure.
+
+**Read the install script's report.** A version bump is where file names move — that
+is how `libsharpyuv.lib` appeared when libwebp split it out, and how openssl went from
+`libcrypto-1_1.dll` to `libcrypto-3-<arch>.dll`. The rename list and the "not found"
+list printed at the end of each install run are the signal that the cocos2d-x side
+needs a matching edit.
+
+**Check that the two platforms agree** afterwards. Every installed package records its
+version in the vcpkg tree, so a mismatch is easy to spot:
+
+```powershell
+$info = 'contrib\install-win10\vcpkg\installed\vcpkg\info'
+function Get-Pkgs($triplet) {
+    Get-ChildItem "$info\*_$triplet.list" | ForEach-Object {
+        $n = $_.Name -replace "_$triplet\.list$", ''
+        [pscustomobject]@{ Name = $n -replace '_[^_]*$', ''; Version = ($n -split '_')[-1] }
+    }
+}
+$uwp = Get-Pkgs 'arm64-uwp'
+$win = Get-Pkgs 'x64-windows'
+Compare-Object $uwp $win -Property Name, Version |
+    Where-Object { $_.Name -in ($uwp.Name | Where-Object { $_ -in $win.Name }) }
+```
+
+Anything listed is a package the two platforms disagree on. An empty result means they
+are in step.
+
+**Overlay ports are pinned separately.** `build\vcpkg-overlay-ports\` holds chipmunk,
+freetype, libwebsockets and sqlite3, and a `git pull` does not touch them — their
+versions live in each port's `vcpkg.json`, with the source hash in `portfile.cmake`.
+Upgrading one means editing both.
+
+**Editing an overlay port requires bumping its `port-version`.** vcpkg decides whether
+an installed package is current by comparing version and port-version, *not* by hashing
+the recipe. Change a portfile or a patch without bumping `port-version` and every
+subsequent `vcpkg install` reports the package as already installed and does nothing —
+the edit silently never takes effect, and `vcpkg upgrade` reports everything as
+up-to-date. Bump it, confirm with `vcpkg upgrade --overlay-ports=...` that the package
+now appears in the rebuild list, then follow steps 3 to 5 above.
+
+The same trap catches a *newly added* overlay port: a package already installed from the
+builtin port is not rebuilt just because an overlay for it appeared, so it keeps
+whatever the builtin recipe produced until its port-version moves past the installed
+one.
+
+Chipmunk in particular is pinned deliberately: cocos2d-x compiles its physics code
+against its own bundled headers (7.0.1 with `CP_USE_DOUBLES=0`, the same in the v3 and
+v4 trees), and the prebuilt library is only linked, never re-declared. Building a
+different Chipmunk makes every `cpVect`/`cpFloat` crossing the ABI the wrong size —
+which is a silent crash, not a link error. Do not move it without changing the
+cocos2d-x headers to match.
+
+### For Windows (Win32) App users, by hand
 
 To build static libraries for Win32 is straightfoward, you could just setup a new static libary project with VisualStudio
 and import all the needed source files and header files into the project.

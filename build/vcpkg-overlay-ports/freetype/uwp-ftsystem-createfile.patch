@@ -1,0 +1,33 @@
+Use the UWP CreateFile2 shim on every UWP target, not just /ZW builds.
+
+builds/windows/ftsystem.c carries a CreateFileA shim that forwards to
+CreateFile2, but it is guarded by _WINRT_DLL. MSVC only predefines that when
+compiling with /ZW (C++/CX), which is not how vcpkg builds this C library, so
+the shim was never compiled and FT_Stream_Open referenced the real CreateFileA.
+
+That still links for x64-uwp and arm64-uwp, whose WindowsApp.lib exports the
+ANSI entry point, but x86's WindowsApp.lib does not export it at all, so
+freetype:x86-uwp failed with
+
+    ftsystem.c.obj : error LNK2019: unresolved external symbol _CreateFileA
+    freetyped.dll : fatal error LNK1120: 1 unresolved externals
+
+Keying off the app family instead builds the shim for every UWP architecture,
+which also puts all of them on the same code path. Every API the shim needs
+(CreateFile2, CreateFileMappingFromApp, MapViewOfFileFromApp, GetFileSizeEx,
+MultiByteToWideChar) is present in the x86 WindowsApp.lib.
+
+diff --git a/builds/windows/ftsystem.c b/builds/windows/ftsystem.c
+--- a/builds/windows/ftsystem.c
++++ b/builds/windows/ftsystem.c
+@@ -196,7 +196,9 @@
+
+
+   /* support for Universal Windows Platform UWP, formerly WinRT */
+-#ifdef _WINRT_DLL
++#if defined( _WINRT_DLL )                     ||                       \
++    ( defined( WINAPI_FAMILY_PARTITION )      &&                       \
++      !WINAPI_FAMILY_PARTITION( WINAPI_PARTITION_DESKTOP ) )
+
+ #define PACK_DWORD64( hi, lo )  ( ( (DWORD64)(hi) << 32 ) | (DWORD)(lo) )
+

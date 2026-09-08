@@ -1,0 +1,15 @@
+{
+  "name": "chipmunk",
+  "version": "7.0.1",
+  "port-version": 0,
+  "description": "A fast and lightweight 2D game physics library, pinned to the cocos2d-x flavour (7.0.1, CP_USE_DOUBLES=0).",
+  "homepage": "https://github.com/slembcke/Chipmunk2D",
+  "license": "MIT",
+  "supports": "windows",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}
