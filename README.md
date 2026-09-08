@@ -490,6 +490,51 @@ Note:
 If you build `webp` with arm64, you will get `cpu-features.h` header file not found error. This is a known issue of Android NDK r10c. You could simply create a empty header file
 named `cpu-features.h` under `{ANDROID_NDK}/platforms/android-21/arch-arm64/usr/include`.
 
+### Installing the android / ios / mac prebuilts into a cocos2d-x tree
+
+`build/install_to_cocos2d_x_contrib.sh` is the counterpart of
+`install_to_cocos2d_x_win32.ps1` for the platforms built here: it copies what
+`build/<platform>/` and `build/xcframeworks/` hold into a cocos2d-x working
+tree's `external/`.
+
+```
+build/install_to_cocos2d_x_contrib.sh --target v3 --cocos2d-root <tree>
+build/install_to_cocos2d_x_contrib.sh --target v4 --cocos2d-root <tree> --platforms mac
+build/install_to_cocos2d_x_contrib.sh --target v3 --cocos2d-root <tree> --dry-run
+```
+
+`--target` picks the layout, because the two trees disagree about where several
+libraries live on these platforms:
+
+| | v3 | v4 |
+|---|---|---|
+| openssl | `external/curl/prebuilt/` | `external/openssl/prebuilt/` |
+| libuv | `external/websockets/prebuilt/` (`libuv_a.a`) | `external/uv/prebuilt/` |
+| tiff | installed | not in the tree |
+| Box2D / bullet / glsl-optimizer | built from source | installed |
+
+`--cocos2d-root` is required and takes the root of the tree to install into
+(the directory holding `external/`). `--dry-run` prints every copy without
+making one; run it first when installing into a tree for the first time.
+
+Files land where each tree already looks: `prebuilt/android/<abi>/lib<x>.a`,
+`prebuilt/mac/lib<x>.a`, `prebuilt/ios/<x>.xcframework` and
+`include/<platform>/`. Headers that cocos2d-x keeps in one shared `include/`
+for every platform — zlib, chipmunk, uv, Box2D, bullet, glsl-optimizer — are
+deliberately **not** written: dropping one platform's copy there is how the
+others end up compiling against the wrong header.
+
+**iOS comes from `build_ios_xcframeworks.sh`, not `build.sh -p=ios`.** Both
+trees take `.xcframework` bundles for iOS, and only that script produces them
+(device and simulator have to be built separately — see its header comment).
+Because it is a separate step, the install script warns when
+`build/xcframeworks/` is older than the newest recipe, which is what a stale
+iOS half of the tree looks like.
+
+Everything it could not find is listed at the end of the run. Read that list:
+it is the difference between "not built yet" and "the previous version is still
+sitting in the tree".
+
 ### Enable bitcode for iOS
 On default, when building static libs for TVOS, it will enable bitcode, but iOS doesn't.
 
