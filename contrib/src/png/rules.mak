@@ -1,5 +1,5 @@
 # PNG
-PNG_VERSION := 1.6.44
+PNG_VERSION := 1.6.58
 PNG_URL := $(SF)/libpng/libpng16/$(PNG_VERSION)/libpng-$(PNG_VERSION).tar.xz
 
 
@@ -16,8 +16,10 @@ png: libpng-$(PNG_VERSION).tar.xz .sum-png
 DEPS_png = zlib $(DEPS_zlib)
 
 .png: png
+	# Regenerate before configuring, not after: leaving configure newer than
+	# the Makefile it produced sends GNU make 3.81 (what Xcode still ships)
+	# down its remake-the-makefile path, where it segfaults.
+	$(RECONF)
 	cd $< && $(HOSTVARS) ./configure $(HOSTCONF)
-	cd $< && rm -f aclocal.m4
-	cd $< && aclocal && autoconf
 	cd $< && $(MAKE) install
 	touch $@

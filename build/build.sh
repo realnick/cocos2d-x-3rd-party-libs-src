@@ -485,9 +485,17 @@ do
                     dep_archive_name=$dep_archive
                 fi
 
+                # The name upstream builds it under can differ from the name we
+                # ship it as -- <lib>_original_name, same as the main copy above.
+                dep_original_name_var=${dep_archive}_original_name
+                dep_original_name=${!dep_original_name_var}
+                if [ -z $dep_original_name ]; then
+                    dep_original_name=$dep_archive_name
+                fi
+
                 local_library_install_path=$cfg_platform_name/${dep_archive}/prebuilt/$original_arch_name
                 mkdir -p $local_library_install_path
-                cp $top_dir/contrib/$install_library_path/$arch/lib/lib${dep_archive_name}.a $local_library_install_path/lib${dep_archive_name}.a
+                cp $top_dir/contrib/$install_library_path/$arch/lib/lib${dep_original_name}.a $local_library_install_path/lib${dep_archive_name}.a
 
             done
         fi

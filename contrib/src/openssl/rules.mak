@@ -1,9 +1,8 @@
 # OPENSSL
-# 1.1.1w is the final 1.1.1 LTS release (Sep 2023) - the 1.1.1 branch itself
-# is EOL, but this stays API-compatible with 1.1.1k while picking up ~2.5
-# years of security fixes. A 3.x upgrade is a separate, larger decision
-# (engine removal / API changes could affect curl and websockets).
-OPENSSL_VERSION := 1.1.1w
+# 3.x, matching what the Windows (vcpkg) side builds. The 1.1.1 branch this
+# used to track went EOL in Sep 2023, and curl 8.21 refuses to configure
+# against anything older than 3.0 -- so curl and libwebsockets move with this.
+OPENSSL_VERSION := 3.6.3
 OPENSSL_URL := https://www.openssl.org/source/openssl-$(OPENSSL_VERSION).tar.gz
 
 OPENSSL_EXTRA_CONFIG_1=no-shared no-unit-test
@@ -50,26 +49,38 @@ endif
 endif
 
 ifdef HAVE_ANDROID
-export ANDROID_SYSROOT=$(ANDROID_TOOLCHAIN_PATH)/sysroot
-export SYSROOT=$(ANDROID_SYSROOT)
-export NDK_SYSROOT=$(ANDROID_SYSROOT)
-export ANDROID_NDK_SYSROOT=$(ANDROID_SYSROOT)
-export CROSS_SYSROOT=$(ANDROID_SYSROOT)
+# OpenSSL's Configurations/15-android.conf drives everything off
+# $ANDROID_NDK_ROOT. Point it at the standalone toolchain build.sh generates:
+# it carries AndroidVersion.txt and a sysroot, which is exactly what openssl
+# recognises as a "standalone toolchain". Pointing it at the NDK proper instead
+# sends it looking for platforms/android-<api>/arch-<arch>, and the arch it
+# derives from the deprecated target aliases ("aarch64") is not the name the
+# NDK uses on disk ("arm64"), so that path just fails.
+# openssl's android config sets CROSS_COMPILE=aarch64-linux-android- itself and
+# prefixes the tool names with it, so hand it bare ones -- HOSTVARS passes the
+# already-prefixed names, which would come out doubled
+# (aarch64-linux-android-aarch64-linux-android-ar).
+OPENSSL_ENV = ANDROID_NDK_ROOT="$(ANDROID_TOOLCHAIN_PATH)" \
+	AR="ar" RANLIB="ranlib" LD="ld" STRIP="strip"
 
 ifeq ($(MY_TARGET_ARCH),arm64-v8a)
-OPENSSL_CONFIG_VARS=android64-aarch64
+OPENSSL_CONFIG_VARS=android-arm64
 endif
 
 ifeq ($(MY_TARGET_ARCH),armeabi-v7a)
-OPENSSL_CONFIG_VARS=android-armeabi
+OPENSSL_CONFIG_VARS=android-arm
 endif
 
 ifeq ($(MY_TARGET_ARCH),armeabi)
-OPENSSL_CONFIG_VARS=android-armeabi
+OPENSSL_CONFIG_VARS=android-arm
 endif
 
 ifeq ($(MY_TARGET_ARCH),x86)
 OPENSSL_CONFIG_VARS=android-x86
+endif
+
+ifeq ($(MY_TARGET_ARCH),x86_64)
+OPENSSL_CONFIG_VARS=android-x86_64
 endif
 endif
 
@@ -155,13 +166,10 @@ $(TARBALLS)/openssl-$(OPENSSL_VERSION).tar.gz:
 
 openssl: openssl-$(OPENSSL_VERSION).tar.gz .sum-openssl
 	$(UNPACK)
-ifdef HAVE_ANDROID
-	$(APPLY) $(SRC)/openssl/android-clang.patch
-endif
 	$(MOVE)
 
 .openssl: openssl
-	cd $< && $(HOSTVARS_PIC) ./Configure $(OPENSSL_CONFIG_VARS) --prefix=$(PREFIX) ${OPENSSL_ARCH} $(OPENSSL_EXTRA_CONFIG_1) $(OPENSSL_EXTRA_CONFIG_2)
+	cd $< && $(HOSTVARS_PIC) $(OPENSSL_ENV) ./Configure $(OPENSSL_CONFIG_VARS) --prefix=$(PREFIX) ${OPENSSL_ARCH} $(OPENSSL_EXTRA_CONFIG_1) $(OPENSSL_EXTRA_CONFIG_2)
 ifdef HAVE_IOS
 	cd $< && perl -i -pe "s|^CFLAGS=(.*) -DNDEBUG (.*)-O3|CFLAGS=\\1 \\2 ${OPTIM} ${ENABLE_BITCODE}|g" Makefile
 	cd $< && perl -i -pe "s|^CFLAGS_Q=(.*) -DNDEBUG (.*)|CFLAGS_Q=\\1 \\2 ${OPTIM} ${ENABLE_BITCODE}|g" Makefile

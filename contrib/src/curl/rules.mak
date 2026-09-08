@@ -1,7 +1,7 @@
 # curl
 
-CURL_VERSION := 7.76.1
-CURL_URL :=  http://curl.haxx.se/download/curl-$(CURL_VERSION).tar.gz
+CURL_VERSION := 8.21.0
+CURL_URL := https://curl.se/download/curl-$(CURL_VERSION).tar.gz
 
 $(TARBALLS)/curl-$(CURL_VERSION).tar.gz:
 	$(call download,$(CURL_URL))
@@ -32,6 +32,7 @@ endif
 		--with-zlib \
 		--enable-ipv6 \
 		--disable-ldap \
+		--without-libpsl \
 		$(configure_option)
 
 	cd $< && $(MAKE) install

@@ -1,22 +1,21 @@
-diff --git a/include/GLFW/glfw3native.h b/include/GLFW/glfw3native.h
-index 267e75c..26bf782 100644
---- a/include/GLFW/glfw3native.h
-+++ b/include/GLFW/glfw3native.h
-@@ -94,7 +94,7 @@ extern "C" {
-  #if defined(__OBJC__)
-   #import <Cocoa/Cocoa.h>
-  #else
--  #include <ApplicationServices/ApplicationServices.h>
-+  //#include <ApplicationServices/ApplicationServices.h>
-   typedef void* id;
+diff -Naur a/include/GLFW/glfw3native.h b/include/GLFW/glfw3native.h
+--- a/include/GLFW/glfw3native.h	2026-09-08 17:31:46
++++ b/include/GLFW/glfw3native.h	2026-09-08 17:31:46
+@@ -109,7 +109,7 @@
+   #if defined(__OBJC__)
+    #import <Cocoa/Cocoa.h>
+   #else
+-   #include <ApplicationServices/ApplicationServices.h>
++   //#include <ApplicationServices/ApplicationServices.h>
+    #include <objc/objc.h>
+   #endif
   #endif
- #elif defined(GLFW_EXPOSE_NATIVE_X11) || defined(GLFW_EXPOSE_NATIVE_GLX)
-@@ -200,7 +200,7 @@ GLFWAPI HGLRC glfwGetWGLContext(GLFWwindow* window);
+@@ -268,7 +268,7 @@
   *
   *  @ingroup native
   */
 -GLFWAPI CGDirectDisplayID glfwGetCocoaMonitor(GLFWmonitor* monitor);
 +//GLFWAPI CGDirectDisplayID glfwGetCocoaMonitor(GLFWmonitor* monitor);
-
+ 
  /*! @brief Returns the `NSWindow` of the specified window.
   *

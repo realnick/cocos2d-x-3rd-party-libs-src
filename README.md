@@ -174,9 +174,21 @@ shipping", across every platform. Regenerate it after a Windows build and commit
 the result:
 
 ```
-build/record_versions.sh              # regenerate (needs the vcpkg clone)
+build/record_versions.sh              # regenerate
 build/record_versions.sh --verify     # compare the two halves, exit 1 on drift
 ```
+
+It is a **lockfile: generated only, never hand-edited**. Bump a version in a
+recipe, re-run the generator, commit both. Run it with any bash, including
+macOS's stock 3.2.
+
+Where you run it decides which half is recomputed. With a vcpkg clone present
+(the Windows machine) both halves are read fresh. Without one — the mac and
+Linux machines, which only have the contrib toolchains — the vcpkg half is
+carried forward verbatim out of the `versions.json` already in the repo and
+only the contrib half is recomputed, so a contrib-only bump can be locked in
+from the machine that made it without blanking the Windows pin. That path
+parses the existing file with `jq`, so install it there (`brew install jq`).
 
 It exists because the two halves of this repo pin versions in completely
 different ways:
@@ -203,11 +215,50 @@ and Mac can check whether a recipe is in step with Windows before touching it.
 It only compares the upstream version, ignoring a vcpkg `#N` port-version, since
 that is a repackaging of the same release.
 
-Right now one primary library is aligned (chipmunk) and fourteen are not.
-Raising the contrib recipes is the intended direction — openssl 1.1.1 is EOL, so
-pinning Windows back down to it is not an option — and it should be staged,
-smallest gaps first. Note that these recipes only build on macOS and Linux, so
-that work cannot be done from a Windows machine.
+Raising the contrib recipes was the intended direction — openssl 1.1.1 is EOL,
+so pinning Windows back down to it was never an option — and it was done in two
+staged rounds, smallest gaps first. Note that these recipes only build on macOS
+and Linux, so that work cannot be done from a Windows machine.
+
+Twelve of the fifteen primary libraries built on both sides are aligned:
+chipmunk, plus zlib 1.3.2, libpng 1.6.58, freetype 2.14.3, libtiff 4.7.2,
+libwebp 1.6.0, glfw 3.4, libuv 1.52.1, openssl 3.6.3, curl 8.21.0,
+libwebsockets 4.5.8 and libjpeg-turbo 3.2.0. Every one was built for mac, ios
+and android before being locked in.
+
+The three that remain diverged — `glew`, `libiconv` and `sqlite` — are
+**linux-only here**: none of them appears in `cfg_all_supported_libraries` in
+`build/mac.ini`, `build/ios.ini` or `build/android.ini`, so they are not part of
+any android/ios/mac prebuilt and only the linux platform is affected. Raising
+them needs a Linux machine to verify on.
+
+**cocos2d-x side changes to follow from these bumps:**
+
+- libwebp 1.3+ splits sharp YUV conversion into its own archive, so
+  `libsharpyuv.a` now ships beside `libwebp.a` (`webp_archive_list` in
+  `build/main.ini`) and has to be linked alongside it — the same split Windows
+  already hit as `libsharpyuv.lib`.
+- openssl is 3.x now on every platform, as it already was on Windows. Anything
+  in the engine still calling 1.1.1-era APIs has to move with it.
+- libuv still ships as `libuv_a.a` even though upstream renamed its static
+  archive to plain `libuv.a`, so nothing changes for it on the engine side
+  (`uv_original_name` in `build/main.ini`).
+- libjpeg is libjpeg-turbo now rather than IJG jpeg, matching Windows. It keeps
+  the `libjpeg.a` name and the libjpeg API, so this should be invisible.
+
+**Notes for whoever builds these next:**
+
+- openssl on android is driven off `$ANDROID_NDK_ROOT`, which the recipe points
+  at the standalone toolchain `build.sh` generates rather than the NDK itself —
+  see the comment in `contrib/src/openssl/rules.mak`. The android openssl build
+  was broken outright before this (a patch that no longer applied, on top of a
+  target alias whose arch name did not match the NDK layout); it works now.
+- Building android from a mac needs `MACOSX_DEPLOYMENT_TARGET` exported, or
+  LuaJIT's build refuses to configure its host tool.
+- The mac `x86_64` arch does not cross-compile from an Apple Silicon host: the
+  build passes `-m64` with no `-arch`, so it silently produces arm64 objects
+  labelled x86_64, and the fat-library step then fails on two arm64 slices.
+  Build mac `arm64` there.
 
 ### Checking an installed tree for DLLs that will not load
 
