@@ -19,7 +19,12 @@ tiff: tiff-$(TIFF_VERSION).tar.gz .sum-tiff
 		--disable-jpeg \
 		--disable-zlib \
 		--disable-cxx \
+		--disable-tools \
 		--without-x
 	cd $< && $(MAKE) -C port && $(MAKE) -C libtiff
-	cd $< && $(MAKE) install
+	# Only libtiff itself. A top-level install also builds contrib/ (addtiffo and
+	# friends) on top of the tools --disable-tools already drops, and those need
+	# log2(), which 32-bit Android's libm does not have below API 18. The library
+	# and its headers are all cocos2d-x takes.
+	cd $< && $(MAKE) -C libtiff install
 	touch $@

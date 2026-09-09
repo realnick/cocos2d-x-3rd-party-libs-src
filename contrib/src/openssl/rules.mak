@@ -67,20 +67,28 @@ ifeq ($(MY_TARGET_ARCH),arm64-v8a)
 OPENSSL_CONFIG_VARS=android-arm64
 endif
 
+# no-asm on 32-bit arm for the same reason as iOS armv7 below: openssl's armv7
+# assembly does not assemble with clang's integrated assembler (bsaes-armv7.S
+# alone trips "immediate operand must be in the range [0,4095]").
 ifeq ($(MY_TARGET_ARCH),armeabi-v7a)
 OPENSSL_CONFIG_VARS=android-arm
+OPENSSL_EXTRA_CONFIG_2=no-asm
 endif
 
 ifeq ($(MY_TARGET_ARCH),armeabi)
 OPENSSL_CONFIG_VARS=android-arm
+OPENSSL_EXTRA_CONFIG_2=no-asm
 endif
 
 ifeq ($(MY_TARGET_ARCH),x86)
 OPENSSL_CONFIG_VARS=android-x86
 endif
 
+# no-asm: openssl's x86_64 assembly now includes AVX-512 code paths that the
+# NDK r16 assembler does not know ("instruction requires: AVX-512 BW ISA").
 ifeq ($(MY_TARGET_ARCH),x86_64)
 OPENSSL_CONFIG_VARS=android-x86_64
+OPENSSL_EXTRA_CONFIG_2=no-asm
 endif
 endif
 
@@ -93,7 +101,12 @@ IOS_PLATFORM=OS
 # an armv7 object too. Use our own per-arch targets (config/20-ios-tvos-
 # cross.conf) so each arch actually gets its own -arch flag.
 OPENSSL_CONFIG_VARS=ios-cross-armv7
-OPENSSL_EXTRA_CONFIG_2=no-async
+# no-asm: openssl's armv4 assembly emits `.word OPENSSL_armcap_P-.`, which
+# clang's integrated assembler rejects for Mach-O ("symbol can not be undefined
+# in a subtraction expression"). armv7/armv7s are capped at iOS 10 and long
+# discontinued, so dropping to the C implementations there costs nothing that
+# matters.
+OPENSSL_EXTRA_CONFIG_2=no-async no-asm
 endif
 
 ifeq ($(MY_TARGET_ARCH),arm64)
@@ -109,7 +122,7 @@ endif
 ifeq ($(MY_TARGET_ARCH),armv7s)
 IOS_PLATFORM=OS
 OPENSSL_CONFIG_VARS=ios-cross-armv7s
-OPENSSL_EXTRA_CONFIG_2=no-async
+OPENSSL_EXTRA_CONFIG_2=no-async no-asm
 endif
 
 ifeq ($(MY_TARGET_ARCH),i386)

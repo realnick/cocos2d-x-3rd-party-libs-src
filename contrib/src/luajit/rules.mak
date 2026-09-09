@@ -78,7 +78,10 @@ ifdef HAVE_MACOSX
 
 ifeq ($(MY_TARGET_ARCH),x86_64)
 LUAJIT_HOST_CC="gcc -m64 $(OPTIM)"
-LUAJIT_TARGET_FLAGS="-DLUAJIT_ENABLE_GC64"
+# -arch x86_64 for the same reason the arm64 branch below names its target:
+# without it LuaJIT builds for whatever the host is, so on an Apple Silicon
+# machine the x86_64 slice came out arm64 and lipo refused to pair them.
+LUAJIT_TARGET_FLAGS="-DLUAJIT_ENABLE_GC64 -arch x86_64"
 endif
 
 ifeq ($(MY_TARGET_ARCH),i386)

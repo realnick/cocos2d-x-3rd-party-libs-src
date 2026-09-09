@@ -99,6 +99,12 @@ LD := $(HOST)-ld
 STRIP := $(HOST)-strip
 RANLIB := $(HOST)-ranlib
 EXTRA_CFLAGS += --sysroot=$(ANDROID_TOOLCHAIN_PATH)/sysroot
+# openssl 3.x's threads_pthread.c uses 64-bit atomics, which on 32-bit Android
+# are libatomic calls (__atomic_fetch_add_8 and friends) rather than
+# instructions. Everything that links libcrypto needs it -- cocos2d-x included.
+ifneq ($(filter $(MY_TARGET_ARCH),armeabi-v7a armeabi x86),)
+EXTRA_LIBS += -latomic
+endif
 endif
 
 ifdef HAVE_TIZEN
@@ -124,8 +130,11 @@ EXTRA_CFLAGS += -isysroot $(MACOSX_SDK) -mmacosx-version-min=$(MIN_OSX_VERSION) 
 EXTRA_LDFLAGS += -Wl,-syslibroot,$(MACOSX_SDK) -mmacosx-version-min=$(MIN_OSX_VERSION) -isysroot $(MACOSX_SDK) -DMACOSX_DEPLOYMENT_TARGET=$(MIN_OSX_VERSION)
 
 ifeq ($(ARCH),x86_64)
-EXTRA_CFLAGS += -m64 $(OPTIM)
-EXTRA_LDFLAGS += -m64
+# -arch x86_64, not just -m64: on an Apple Silicon host -m64 means "the native
+# 64-bit arch", so this silently produced arm64 objects filed under x86_64, and
+# the fat-library step then failed on two arm64 slices.
+EXTRA_CFLAGS += -m64 -arch x86_64 $(OPTIM)
+EXTRA_LDFLAGS += -m64 -arch x86_64
 else
 ifeq ($(ARCH),arm64)
 EXTRA_CFLAGS += -m64 -target arm64-apple-macos11 $(OPTIM)
@@ -197,6 +206,10 @@ CPPFLAGS := $(CPPFLAGS) $(EXTRA_CFLAGS) $(OPTIM)
 CXXFLAGS := $(CXXFLAGS) $(EXTRA_CFLAGS) $(OPTIM)
 EXTRA_LDFLAGS += -L$(PREFIX)/lib
 LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
+# Libraries, as opposed to linker flags: these have to come after the objects
+# and archives that need them, which is where configure puts LIBS and not where
+# it puts LDFLAGS.
+LIBS := $(LIBS) $(EXTRA_LIBS)
 # Do not export those! Use HOSTVARS.
 
 # Do the FPU detection, after we have figured out our compilers and flags.
@@ -308,12 +321,14 @@ HOSTVARS := $(HOSTTOOLS) \
 	CPPFLAGS="$(CPPFLAGS)" \
 	CFLAGS="$(CFLAGS)" \
 	CXXFLAGS="$(CXXFLAGS)" \
-	LDFLAGS="$(LDFLAGS)"
+	LDFLAGS="$(LDFLAGS)" \
+	LIBS="$(LIBS)"
 HOSTVARS_PIC := $(HOSTTOOLS) \
 	CPPFLAGS="$(CPPFLAGS) $(PIC)" \
 	CFLAGS="$(CFLAGS) $(PIC)" \
 	CXXFLAGS="$(CXXFLAGS) $(PIC)" \
-	LDFLAGS="$(LDFLAGS)"
+	LDFLAGS="$(LDFLAGS)" \
+	LIBS="$(LIBS)"
 
 download_git = \
 	rm -Rf $(@:.tar.xz=) && \
@@ -431,6 +446,10 @@ else ifdef HAVE_IOS
 	echo "set(CMAKE_OSX_SYSROOT $(IOS_SDK))" >> $@
 else
 	echo "set(CMAKE_OSX_SYSROOT $(MACOSX_SDK))" >> $@
+	# Without this CMake builds for whatever it thinks the machine is, and
+	# recent CMake happily produces a universal binary -- which the per-arch
+	# fat-library step then cannot lipo together with the other arch's slice.
+	echo "set(CMAKE_OSX_ARCHITECTURES $(ARCH))" >> $@
 endif
 endif
 ifdef HAVE_CROSS_COMPILE
