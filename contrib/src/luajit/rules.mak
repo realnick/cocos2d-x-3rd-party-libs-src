@@ -2,8 +2,13 @@
 
 LUAJIT_VERSION := 2.1
 # luajit.org's download server is gone; LuaJIT 2.1 has never had a final
-# tagged release, so pull the same rolling v2.1 branch from GitHub instead.
-LUAJIT_URL := https://codeload.github.com/LuaJIT/LuaJIT/tar.gz/refs/heads/v2.1
+# tagged release, so pull the rolling v2.1 branch from GitHub instead. Pin a
+# commit rather than refs/heads/v2.1: a branch tarball is regenerated from
+# whatever the branch points at, so every upstream push changes its contents
+# and .sum-luajit fails against the recorded SHA512. Bumping LuaJIT means
+# changing this SHA and refreshing contrib/src/luajit/SHA512SUMS together.
+LUAJIT_COMMIT := c6ffc141a8762b41703f9287d63d93622a13dd8f
+LUAJIT_URL := https://codeload.github.com/LuaJIT/LuaJIT/tar.gz/$(LUAJIT_COMMIT)
 
 $(TARBALLS)/LuaJIT-$(LUAJIT_VERSION).tar.gz:
 	$(call download,$(LUAJIT_URL))
@@ -12,6 +17,9 @@ $(TARBALLS)/LuaJIT-$(LUAJIT_VERSION).tar.gz:
 
 luajit: LuaJIT-$(LUAJIT_VERSION).tar.gz .sum-luajit
 	$(UNPACK)
+# A commit tarball unpacks to LuaJIT-<sha>, but UNPACK_DIR (and so APPLY and
+# MOVE) is derived from the tarball's own name, LuaJIT-$(LUAJIT_VERSION).
+	mv LuaJIT-$(LUAJIT_COMMIT) LuaJIT-$(LUAJIT_VERSION)
 ifeq ($(LUAJIT_VERSION),2.0.1)
 	$(APPLY) $(SRC)/luajit/v2.0.1_hotfix1.patch
 endif

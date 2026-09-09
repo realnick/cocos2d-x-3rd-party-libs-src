@@ -124,7 +124,15 @@ contrib_version() {
 	local mak="$1" v ref sha
 	v=$(sed -n 's/^[[:space:]]*[A-Z0-9_]*VERSION[[:space:]]*:\{0,1\}=[[:space:]]*\([^[:space:]]*\).*/\1/p' "$mak" | head -1)
 	if [ -n "$v" ]; then
-		echo "$v"
+		# A recipe whose upstream has no tagged release for <NAME>_VERSION
+		# (luajit's rolling 2.1) additionally pins <NAME>_COMMIT. Record it:
+		# the version string alone would not identify what was built.
+		sha=$(sed -n 's/^[[:space:]]*[A-Z0-9_]*COMMIT[[:space:]]*:\{0,1\}=[[:space:]]*\([0-9a-f]*\).*/\1/p' "$mak" | head -1)
+		if [ -n "$sha" ]; then
+			echo "${v}@${sha}"
+		else
+			echo "$v"
+		fi
 		return
 	fi
 	ref=$(sed -n 's/.*download_git,\$([A-Z0-9_]*),[[:space:]]*\([^,]*\),.*/\1/p' "$mak" | head -1)
