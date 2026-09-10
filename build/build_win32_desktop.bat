@@ -34,6 +34,31 @@ SET VCPKG_DIR=%START_DIR%\..\contrib\install-win10\vcpkg
 if not "%COCOS_VCPKG_DIR%"=="" set VCPKG_DIR=%COCOS_VCPKG_DIR%
 SET OVERLAY_PORTS=%START_DIR%\vcpkg-overlay-ports
 
+REM vcpkg builds autotools ports (libiconv) under msys2 and hands `make
+REM install` a DESTDIR of <packages root>\<port>_<triplet> followed by the
+REM *whole* installed path a second time. Under a deep Jenkins workspace that
+REM doubled path passes 260 chars, msys2 converts it to a \\?\-prefixed long
+REM path, cl.exe then sees an argument starting with a slash, treats iconv.lib
+REM as an unknown option and iconv.exe fails to link (LNK1120). Enabling the
+REM OS long-path setting does not help: the string never reaches a filesystem
+REM API, it is cl.exe's own argument parser that rejects it.
+REM
+REM So the intermediate trees (buildtrees + packages -- sources, objects and
+REM the staging dir, none of them build output) live under a short junction
+REM that points back into the workspace. The bytes stay inside the workspace,
+REM where `git clean -fdx` reaches them; only the path vcpkg is handed is
+REM short. installed\ does not move, so install_to_cocos2d_x_win32.ps1 still
+REM finds the actual build output where it always was.
+REM
+REM The junction is named after a short hash of the vcpkg clone path, so a
+REM second working tree building at the same time gets its own; two runs
+REM sharing one clone are already serialised by vcpkg's lock on installed\.
+for %%I in ("%INSTALL_DIR%\scratch") do set SCRATCH_DIR=%%~fI
+for /f %%H in ('powershell -NoProfile -Command "([BitConverter]::ToString([Security.Cryptography.MD5]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes('!VCPKG_DIR!'.ToLower()))) -replace '-','').Substring(0,8)"') do set VCPKG_HASH=%%H
+SET SCRATCH_LINK=%~d0\.vc\!VCPKG_HASH!
+if not "%COCOS_VCPKG_SCRATCH%"=="" set SCRATCH_LINK=%COCOS_VCPKG_SCRATCH%
+SET VCPKG_ROOTS=--x-buildtrees-root="!SCRATCH_LINK!\bt" --x-packages-root="!SCRATCH_LINK!\pkg"
+
 REM Dynamic triplet: DLL + import lib.
 REM   v3 + v4: zlib curl libogg libvorbis mpg123 openal-soft glew libiconv
 REM   v4 only: openssl libuv libwebsockets
@@ -71,6 +96,8 @@ if "%ARCHES%"=="" set ARCHES=win32 win64 arm64
 echo Install dir:     %INSTALL_DIR%
 echo Vcpkg dir:       %VCPKG_DIR%
 echo Overlay ports:   %OVERLAY_PORTS%
+echo Scratch dir:     !SCRATCH_DIR!
+echo Scratch link:    !SCRATCH_LINK!
 echo Architectures:  %ARCHES%
 
 if "%DO_CLEAN%"=="1" (
@@ -81,9 +108,21 @@ if "%DO_CLEAN%"=="1" (
 	if "%COCOS_VCPKG_DIR%"=="" (
 		if exist "%VCPKG_DIR%" rmdir /s /q "%VCPKG_DIR%"
 	)
+	if exist "!SCRATCH_LINK!" rmdir "!SCRATCH_LINK!" >nul 2>&1
+	if exist "!SCRATCH_DIR!" rmdir /s /q "!SCRATCH_DIR!"
 )
 
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
+
+REM Point the short junction at the in-workspace scratch dir. Plain `rmdir`
+REM on a junction drops the link and leaves the target alone -- and refuses to
+REM touch a real directory, so a name collision fails mklink instead of
+REM eating someone's files.
+if not exist "!SCRATCH_DIR!" mkdir "!SCRATCH_DIR!"
+if not exist "%~d0\.vc" mkdir "%~d0\.vc"
+if exist "!SCRATCH_LINK!" rmdir "!SCRATCH_LINK!" >nul 2>&1
+mklink /J "!SCRATCH_LINK!" "!SCRATCH_DIR!" >nul
+if !ERRORLEVEL! neq 0 goto :error
 
 REM --- Clone modern microsoft/vcpkg (HEAD) ---
 if not exist "%VCPKG_DIR%\.git" (
@@ -134,11 +173,11 @@ for %%P in (%DYN_PKGS%) do (
 	REM --classic: the overlay ports carry vcpkg.json files of their own, so
 	REM running this from inside one would otherwise put vcpkg in manifest
 	REM mode, where `install <pkg>:<triplet>` is rejected.
-	"%VCPKG_DIR%\vcpkg.exe" install --classic %%P:!DYN_TRIPLET! --overlay-ports="%OVERLAY_PORTS%"
+	"%VCPKG_DIR%\vcpkg.exe" install --classic %%P:!DYN_TRIPLET! --overlay-ports="%OVERLAY_PORTS%" %VCPKG_ROOTS%
 	if !ERRORLEVEL! neq 0 endlocal & exit /b !ERRORLEVEL!
 )
 for %%P in (%STATIC_PKGS%) do (
-	"%VCPKG_DIR%\vcpkg.exe" install --classic "%%P:!STATIC_TRIPLET!" --overlay-ports="%OVERLAY_PORTS%"
+	"%VCPKG_DIR%\vcpkg.exe" install --classic "%%P:!STATIC_TRIPLET!" --overlay-ports="%OVERLAY_PORTS%" %VCPKG_ROOTS%
 	if !ERRORLEVEL! neq 0 endlocal & exit /b !ERRORLEVEL!
 )
 
