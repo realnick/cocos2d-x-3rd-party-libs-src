@@ -302,11 +302,18 @@ function generate_android_standalone_toolchain()
         return
     fi
 
-    "$ANDROID_NDK/build/tools/make-standalone-toolchain.sh" \
-      --arch="${arch}" \
-      --platform="${api_level}" \
-      --stl=libc++ \
-      --install-dir="${toolchain_path}"
+    # Call make_standalone_toolchain.py rather than the make-standalone-
+    # toolchain.sh wrapper beside it. The wrapper is a thin shim that runs
+    # `python <that same script>`, and macOS no longer ships a `python` (only
+    # `python3`), so it dies with a bare "ERROR: Failed to create toolchain."
+    # that says nothing about the missing interpreter. The generator itself
+    # runs fine under Python 3. It wants a bare API number where the wrapper
+    # accepted the "android-<n>" form callers pass, so strip the prefix.
+    python3 "$ANDROID_NDK/build/tools/make_standalone_toolchain.py" \
+      --arch "${arch}" \
+      --api "${api_level#android-}" \
+      --stl libc++ \
+      --install-dir "${toolchain_path}"
 }
 
 # build all the libraries for different arches
